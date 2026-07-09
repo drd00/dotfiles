@@ -1,0 +1,16 @@
+# ~/.bashrc
+#
+# Only run for interactive shells
+[[ $- != *i* ]] && return
+
+BASH_CONFIG="$HOME/.config/bash"
+
+# Core config
+[ -f "$BASH_CONFIG/exports.sh" ] && source "$BASH_CONFIG/exports.sh"
+[ -f "$BASH_CONFIG/path.sh" ] && source "$BASH_CONFIG/path.sh"
+[ -f "$BASH_CONFIG/aliases.sh" ] && source "$BASH_CONFIG/aliases.sh"
+[ -f "$BASH_CONFIG/functions.sh" ] && source "$BASH_CONFIG/functions.sh"
+[ -f "$BASH_CONFIG/prompt.sh" ] && source "$BASH_CONFIG/prompt.sh"
+
+# Private/local config, not version-controlled
+[ -f "$BASH_CONFIG/local.sh" ] && source "$BASH_CONFIG/local.sh"

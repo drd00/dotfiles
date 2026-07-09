@@ -1,0 +1,8 @@
+- name: Configure system
+  hosts: local
+  become: true
+
+  roles:
+    - common
+    - neovim
+

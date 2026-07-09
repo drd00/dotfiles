@@ -1,0 +1,20 @@
+- name: Enable Ubuntu repositories
+  ansible.builtin.import_tasks: ubuntu_repos.yml
+  when: ansible_distribution == "Ubuntu"
+
+- name: Install common CLI tools
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - wget
+      - unzip
+      - python3-pip
+      - python3-venv
+      - ripgrep
+      - fd-find
+      - fzf
+      - build-essential
+      - ca-certificates
+    state: present
+

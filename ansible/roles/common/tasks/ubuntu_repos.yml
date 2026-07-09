@@ -1,0 +1,21 @@
+- name: Ensure add-apt-repository is available
+  ansible.builtin.apt:
+    name: software-properties-common
+    state: present
+    update_cache: true
+
+- name: Enable universe repository
+  ansible.builtin.command:
+    cmd: add-apt-repository -y universe
+    register: universe_repo
+    changed_when: "'Adding component' in universe_repo.stdout or 'enabled' in universe_repo.stdout"
+
+- name: Enable multiverse repository
+  ansible.builtin.command:
+    cmd: add-apt-repository -y multiverse
+  register: multiverse_repo
+  changed_when: "'Adding component' in multiverse_repo.stdout or 'enabled' in multiverse_repo.stdout"
+
+- name: Update apt cache after enabling repositories
+  ansible.builtin.apt:
+    update_cache: true

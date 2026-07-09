@@ -1,0 +1,6 @@
+# Local/private config.
+# Copy this to local.sh and customize it.
+# local.sh is ignored by Git.
+
+# export WORK_API_URL="..."
+# alias vpnup="..."

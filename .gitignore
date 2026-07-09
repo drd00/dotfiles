@@ -1,0 +1,5 @@
+# Private/local files
+bash/local.sh
+bash/secrets.sh
+*.secret
+*.local
