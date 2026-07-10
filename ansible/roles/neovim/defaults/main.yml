@@ -7,7 +7,7 @@ go_version: "1.26.5"
 tree_sitter_cli_version: "v0.26.10"
 
 # Point this at your configuration repository after pushing the rewritten tree.
-neovim_config_repo: "https://github.com/drd00/nvim.git"
+neovim_config_repo: "https://github.com/drd00/nvim26.git"
 neovim_config_version: "main"
 neovim_config_update: true
 
