@@ -57,6 +57,88 @@ extract() {
     esac
 }
 
+compress_dir() {
+    local source_dir="${1:-}"
+    local output_file="${2:-}"
+
+    if [[ -z "$source_dir" || -z "$output_file" ]]; then
+        printf 'Usage: compress_dir <directory> <output-file>\n' >&2
+        printf 'Example: compress_dir ./project ./backups/project.tar.gz\n' >&2
+        return 2
+    fi
+
+    if [[ ! -d "$source_dir" ]]; then
+        printf 'Error: directory does not exist: %s\n' "$source_dir" >&2
+        return 1
+    fi
+
+    # Resolve the source directory without requiring GNU realpath.
+    local source_parent source_name output_abs
+    source_parent="$(cd -- "$(dirname -- "$source_dir")" && pwd -P)" || return 1
+    source_name="$(basename -- "$source_dir")"
+
+    # Resolve the output path before changing directories.
+    if [[ "$output_file" == /* ]]; then
+        output_abs="$output_file"
+    else
+        output_abs="$PWD/$output_file"
+    fi
+
+    mkdir -p -- "$(dirname -- "$output_abs")" || return 1
+
+    case "$output_file" in
+        *.tar.gz|*.tgz)
+            tar -C "$source_parent" -czf "$output_abs" "$source_name"
+            ;;
+        *.tar.bz2|*.tbz2)
+            tar -C "$source_parent" -cjf "$output_abs" "$source_name"
+            ;;
+        *.tar.xz|*.txz)
+            tar -C "$source_parent" -cJf "$output_abs" "$source_name"
+            ;;
+        *.tar.zst|*.tzst)
+            tar -C "$source_parent" --zstd -cf "$output_abs" "$source_name"
+            ;;
+        *.tar)
+            tar -C "$source_parent" -cf "$output_abs" "$source_name"
+            ;;
+        *.zip)
+            command -v zip >/dev/null 2>&1 || {
+                printf 'Error: zip is not installed.\n' >&2
+                return 1
+            }
+            (
+                cd -- "$source_parent" &&
+                zip -rq "$output_abs" "$source_name"
+            )
+            ;;
+        *.7z)
+            command -v 7z >/dev/null 2>&1 || {
+                printf 'Error: 7z is not installed.\n' >&2
+                return 1
+            }
+            (
+                cd -- "$source_parent" &&
+                7z a "$output_abs" "$source_name"
+            )
+            ;;
+        *)
+            printf 'Error: unsupported output type: %s\n' "$output_file" >&2
+            printf 'Supported: .zip, .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz, .tar.zst, .7z\n' >&2
+            return 2
+            ;;
+    esac
+
+    local status=$?
+    if (( status == 0 )); then
+        printf 'Created: %s\n' "$output_abs"
+    else
+        printf 'Error: compression failed.\n' >&2
+    fi
+
+    return "$status"
+}
+
 pathadd() {
     [ -d "$1" ] || return
     case ":$PATH:" in
@@ -64,3 +146,4 @@ pathadd() {
         *) export PATH="$1:$PATH" ;;
     esac
 }
+
