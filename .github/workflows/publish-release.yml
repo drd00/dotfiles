@@ -1,0 +1,66 @@
+name: Publish dotfiles snapshot
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dotfiles-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Create archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git archive \
+            --format=tar.gz \
+            --prefix=dotfiles/ \
+            --output=dotfiles.tar.gz \
+            "${GITHUB_SHA}"
+
+          sha256sum dotfiles.tar.gz > dotfiles.tar.gz.sha256
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          short_sha="${GITHUB_SHA:0:7}"
+          tag="snapshot-${short_sha}"
+
+          gh release create "${tag}" \
+            dotfiles.tar.gz \
+            dotfiles.tar.gz.sha256 \
+            --target "${GITHUB_SHA}" \
+            --title "Dotfiles snapshot ${short_sha}" \
+            --notes "Automated snapshot of the main branch at commit ${GITHUB_SHA}." \
+            --latest
+
+          # Keep only the newest automatically generated snapshot release.
+          gh release list \
+            --limit 100 \
+            --json tagName \
+            --jq '.[].tagName | select(startswith("snapshot-"))' |
+          while IFS= read -r old_tag; do
+            if [[ "${old_tag}" != "${tag}" ]]; then
+              gh release delete "${old_tag}" \
+                --cleanup-tag \
+                --yes
+            fi
+          done
