@@ -1,0 +1,63 @@
+---
+# Pin infrastructure versions. Updating these values is an explicit, reviewable
+# change rather than an implicit "latest" download during every run.
+neovim_version: "v0.12.4"
+node_version: "v24.18.0"
+go_version: "1.26.5"
+tree_sitter_cli_version: "v0.26.10"
+
+# Point this at your configuration repository after pushing the rewritten tree.
+neovim_config_repo: "https://github.com/drd00/nvim.git"
+neovim_config_version: "main"
+neovim_config_update: true
+
+# Resolve the interactive user even when the play runs with become: true.
+# Setting workstation_user in site.yml/inventory is the most predictable option.
+neovim_user: >-
+  {{ workstation_user | default(
+    ansible_user | default(
+      lookup('env', 'SUDO_USER') | default(lookup('env', 'USER'), true),
+      true
+    ),
+    true
+  ) }}
+neovim_config_dir: ""
+neovim_backup_unmanaged_config: true
+
+# Run deterministic headless bootstrap after cloning/updating the config.
+neovim_bootstrap_plugins: true
+neovim_bootstrap_languages: true
+
+neovim_supported_architectures:
+  x86_64:
+    neovim_asset_arch: "x86_64"
+    neovim_sha256: "012bf3fcac5ade43914df3f174668bf64d05e049a4f032a388c027b1ebd78628"
+    node_asset_arch: "x64"
+    node_sha256: "e5a6701100066156d69da48878e4b95986733b0688e0b83afbe1093778e3fffd"
+    go_asset_arch: "amd64"
+    go_sha256: "5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053"
+    tree_sitter_asset_arch: "x64"
+    tree_sitter_sha256: "5aca1172aae08050d0d1184046377d850c04065205185ebafde361afff8d9f62"
+  aarch64:
+    neovim_asset_arch: "arm64"
+    neovim_sha256: "ceb7e88c6b681f0515d135dcdfad54f5eb4373b25ce6172197cd9a69c758063f"
+    node_asset_arch: "arm64"
+    node_sha256: "fe1338972f79283c6bc21e61dbf4576bbe8c05aded2999d41c8643ad30265142"
+    go_asset_arch: "arm64"
+    go_sha256: "fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49"
+    tree_sitter_asset_arch: "arm64"
+    tree_sitter_sha256: "6a455e6c0c21ddb732d182e3c46e3a8ca1121718254ce684a9dc730ff2367e02"
+
+neovim_apt_packages:
+  - build-essential
+  - ca-certificates
+  - curl
+  - fd-find
+  - git
+  - python3
+  - python3-pip
+  - python3-venv
+  - ripgrep
+  - tar
+  - unzip
+  - xz-utils

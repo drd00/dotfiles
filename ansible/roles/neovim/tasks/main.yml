@@ -1,14 +1,337 @@
-- name: Install Neovim release tarball
-  ansible.builtin.unarchive:
-    src: https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
-    dest: /opt
-    remote_src: true
-    creates: /opt/nvim-linux-x86_64/bin/nvim
+---
+- name: Validate supported platform
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == "Debian"
+      - ansible_architecture in neovim_supported_architectures
+    fail_msg: >-
+      The neovim role currently supports Debian-family systems on x86_64 and
+      aarch64. Detected {{ ansible_os_family }} / {{ ansible_architecture }}.
 
-- name: Symlink nvim into /usr/local/bin
+- name: Select architecture-specific assets
+  ansible.builtin.set_fact:
+    neovim_arch: "{{ neovim_supported_architectures[ansible_architecture] }}"
+
+- name: Read Neovim user's account information
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ neovim_user }}"
+
+- name: Resolve Neovim user's home and config paths
+  ansible.builtin.set_fact:
+    neovim_user_home: "{{ ansible_facts.getent_passwd[neovim_user][4] }}"
+    neovim_effective_config_dir: >-
+      {{ neovim_config_dir if neovim_config_dir | length > 0
+         else ansible_facts.getent_passwd[neovim_user][4] ~ '/.config/nvim' }}
+
+- name: Install Neovim runtime and language-tool prerequisites
+  become: true
+  ansible.builtin.apt:
+    name: "{{ neovim_apt_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create artifact cache
+  become: true
   ansible.builtin.file:
-    src: /opt/nvim-linux-x86_64/bin/nvim
+    path: /var/cache/ansible/neovim
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download pinned Neovim archive
+  become: true
+  ansible.builtin.get_url:
+    url: "https://github.com/neovim/neovim/releases/download/{{ neovim_version }}/nvim-linux-{{ neovim_arch.neovim_asset_arch }}.tar.gz"
+    dest: "/var/cache/ansible/neovim/nvim-linux-{{ neovim_arch.neovim_asset_arch }}-{{ neovim_version }}.tar.gz"
+    checksum: "sha256:{{ neovim_arch.neovim_sha256 }}"
+    mode: "0644"
+  register: neovim_archive_download
+  retries: 3
+  delay: 5
+  until: neovim_archive_download is succeeded
+
+- name: Create versioned Neovim installation directory
+  become: true
+  ansible.builtin.file:
+    path: "/opt/neovim-{{ neovim_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Extract pinned Neovim release
+  become: true
+  ansible.builtin.unarchive:
+    src: "/var/cache/ansible/neovim/nvim-linux-{{ neovim_arch.neovim_asset_arch }}-{{ neovim_version }}.tar.gz"
+    dest: "/opt/neovim-{{ neovim_version }}"
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    creates: "/opt/neovim-{{ neovim_version }}/bin/nvim"
+
+- name: Link selected Neovim release into PATH
+  become: true
+  ansible.builtin.file:
+    src: "/opt/neovim-{{ neovim_version }}/bin/nvim"
     dest: /usr/local/bin/nvim
     state: link
     force: true
 
+- name: Download pinned Node.js archive
+  become: true
+  ansible.builtin.get_url:
+    url: "https://nodejs.org/dist/{{ node_version }}/node-{{ node_version }}-linux-{{ neovim_arch.node_asset_arch }}.tar.xz"
+    dest: "/var/cache/ansible/neovim/node-{{ node_version }}-linux-{{ neovim_arch.node_asset_arch }}.tar.xz"
+    checksum: "sha256:{{ neovim_arch.node_sha256 }}"
+    mode: "0644"
+  register: node_archive_download
+  retries: 3
+  delay: 5
+  until: node_archive_download is succeeded
+
+- name: Create versioned Node.js installation directory
+  become: true
+  ansible.builtin.file:
+    path: "/opt/node-{{ node_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Extract pinned Node.js release
+  become: true
+  ansible.builtin.unarchive:
+    src: "/var/cache/ansible/neovim/node-{{ node_version }}-linux-{{ neovim_arch.node_asset_arch }}.tar.xz"
+    dest: "/opt/node-{{ node_version }}"
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    creates: "/opt/node-{{ node_version }}/bin/node"
+
+- name: Link Node.js tools into PATH
+  become: true
+  ansible.builtin.file:
+    src: "/opt/node-{{ node_version }}/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - node
+    - npm
+    - npx
+    - corepack
+
+- name: Download pinned Go archive
+  become: true
+  ansible.builtin.get_url:
+    url: "https://go.dev/dl/go{{ go_version }}.linux-{{ neovim_arch.go_asset_arch }}.tar.gz"
+    dest: "/var/cache/ansible/neovim/go{{ go_version }}.linux-{{ neovim_arch.go_asset_arch }}.tar.gz"
+    checksum: "sha256:{{ neovim_arch.go_sha256 }}"
+    mode: "0644"
+  register: go_archive_download
+  retries: 3
+  delay: 5
+  until: go_archive_download is succeeded
+
+- name: Create versioned Go installation directory
+  become: true
+  ansible.builtin.file:
+    path: "/opt/go-{{ go_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Extract pinned Go release
+  become: true
+  ansible.builtin.unarchive:
+    src: "/var/cache/ansible/neovim/go{{ go_version }}.linux-{{ neovim_arch.go_asset_arch }}.tar.gz"
+    dest: "/opt/go-{{ go_version }}"
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    creates: "/opt/go-{{ go_version }}/bin/go"
+
+- name: Link Go tools into PATH
+  become: true
+  ansible.builtin.file:
+    src: "/opt/go-{{ go_version }}/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - go
+    - gofmt
+
+- name: Create versioned tree-sitter CLI directory
+  become: true
+  ansible.builtin.file:
+    path: "/opt/tree-sitter-{{ tree_sitter_cli_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download pinned tree-sitter CLI
+  become: true
+  ansible.builtin.get_url:
+    url: "https://github.com/tree-sitter/tree-sitter/releases/download/{{ tree_sitter_cli_version }}/tree-sitter-cli-linux-{{ neovim_arch.tree_sitter_asset_arch }}.zip"
+    dest: "/var/cache/ansible/neovim/tree-sitter-cli-linux-{{ neovim_arch.tree_sitter_asset_arch }}-{{ tree_sitter_cli_version }}.zip"
+    checksum: "sha256:{{ neovim_arch.tree_sitter_sha256 }}"
+    mode: "0644"
+  register: tree_sitter_archive_download
+  retries: 3
+  delay: 5
+  until: tree_sitter_archive_download is succeeded
+
+- name: Extract pinned tree-sitter CLI
+  become: true
+  ansible.builtin.unarchive:
+    src: "/var/cache/ansible/neovim/tree-sitter-cli-linux-{{ neovim_arch.tree_sitter_asset_arch }}-{{ tree_sitter_cli_version }}.zip"
+    dest: "/opt/tree-sitter-{{ tree_sitter_cli_version }}"
+    remote_src: true
+    creates: "/opt/tree-sitter-{{ tree_sitter_cli_version }}/tree-sitter"
+
+- name: Ensure tree-sitter CLI is executable
+  become: true
+  ansible.builtin.file:
+    path: "/opt/tree-sitter-{{ tree_sitter_cli_version }}/tree-sitter"
+    state: file
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Link tree-sitter CLI into PATH
+  become: true
+  ansible.builtin.file:
+    src: "/opt/tree-sitter-{{ tree_sitter_cli_version }}/tree-sitter"
+    dest: /usr/local/bin/tree-sitter
+    state: link
+    force: true
+
+- name: Detect Ubuntu fd binary
+  ansible.builtin.stat:
+    path: /usr/bin/fdfind
+  register: neovim_fdfind
+
+- name: Expose fdfind as fd
+  become: true
+  ansible.builtin.file:
+    src: /usr/bin/fdfind
+    dest: /usr/local/bin/fd
+    state: link
+    force: true
+  when: neovim_fdfind.stat.exists
+
+- name: Create user configuration parent directory
+  become: true
+  become_user: "{{ neovim_user }}"
+  ansible.builtin.file:
+    path: "{{ neovim_effective_config_dir | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Inspect existing Neovim configuration
+  ansible.builtin.stat:
+    path: "{{ neovim_effective_config_dir }}"
+  register: neovim_existing_config
+
+- name: Inspect existing Neovim Git metadata
+  ansible.builtin.stat:
+    path: "{{ neovim_effective_config_dir }}/.git"
+  register: neovim_existing_git
+
+- name: Back up unmanaged Neovim configuration
+  become: true
+  become_user: "{{ neovim_user }}"
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ neovim_effective_config_dir }}"
+      - "{{ neovim_effective_config_dir }}.backup-{{ ansible_date_time.iso8601_basic_short }}"
+  when:
+    - neovim_backup_unmanaged_config
+    - neovim_existing_config.stat.exists
+    - not neovim_existing_git.stat.exists
+  changed_when: true
+
+- name: Refuse to overwrite unmanaged configuration when backups are disabled
+  ansible.builtin.assert:
+    that:
+      - not neovim_existing_config.stat.exists or neovim_existing_git.stat.exists
+    fail_msg: >-
+      {{ neovim_effective_config_dir }} exists but is not a Git checkout.
+      Set neovim_backup_unmanaged_config=true or move it manually.
+  when: not neovim_backup_unmanaged_config
+
+- name: Clone or update Neovim configuration
+  become: true
+  become_user: "{{ neovim_user }}"
+  ansible.builtin.git:
+    repo: "{{ neovim_config_repo }}"
+    dest: "{{ neovim_effective_config_dir }}"
+    version: "{{ neovim_config_version }}"
+    update: "{{ neovim_config_update | bool }}"
+    force: false
+  environment:
+    HOME: "{{ neovim_user_home }}"
+    GIT_TERMINAL_PROMPT: "0"
+  register: neovim_config_checkout
+  retries: 3
+  delay: 5
+  until: neovim_config_checkout is succeeded
+
+- name: Synchronise Neovim plugins
+  become: true
+  become_user: "{{ neovim_user }}"
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/nvim
+      - --headless
+      - +Lazy! sync
+      - +qa
+  environment: &neovim_user_environment
+    HOME: "{{ neovim_user_home }}"
+    XDG_CONFIG_HOME: "{{ neovim_user_home }}/.config"
+    XDG_DATA_HOME: "{{ neovim_user_home }}/.local/share"
+    XDG_STATE_HOME: "{{ neovim_user_home }}/.local/state"
+    XDG_CACHE_HOME: "{{ neovim_user_home }}/.cache"
+    GIT_TERMINAL_PROMPT: "0"
+  changed_when: false
+  register: neovim_plugin_sync
+  retries: 2
+  delay: 5
+  until: neovim_plugin_sync is succeeded
+  when: neovim_bootstrap_plugins
+
+- name: Validate declarative language registry
+  become: true
+  become_user: "{{ neovim_user }}"
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/nvim
+      - --headless
+      - "+lua assert(require('drd.languages').validate())"
+      - +qa
+  environment: *neovim_user_environment
+  changed_when: false
+
+- name: Synchronise language servers, tools, and parsers
+  become: true
+  become_user: "{{ neovim_user }}"
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/nvim
+      - --headless
+      - +DrdSyncLanguages
+      - +qa
+  environment: *neovim_user_environment
+  changed_when: false
+  register: neovim_language_sync
+  retries: 2
+  delay: 5
+  until: neovim_language_sync is succeeded
+  when: neovim_bootstrap_languages
