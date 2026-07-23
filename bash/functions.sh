@@ -139,6 +139,10 @@ compress_dir() {
     return "$status"
 }
 
+speedtest() {
+    curl -s https://raw.githubusercontent.com/PeterLinuxOSS/speedtest-cli/master/speedtest.py | python3 -
+}
+
 pathadd() {
     [ -d "$1" ] || return
     case ":$PATH:" in
